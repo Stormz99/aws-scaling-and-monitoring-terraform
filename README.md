@@ -207,7 +207,7 @@ This project is licensed under the MIT License. See `LICENSE` for details.
 For issues or inquiries, please contact:
 
 - **Name:** Ijiola Abiodun
-- **Email:** [your-email@example.com]
-- **LinkedIn:** [Your LinkedIn Profile]
+- **Email:** ijiolaabiodun7@gmail.com
+- **LinkedIn:** https://www.linkedin.com/in/abiodun-ijiola/
 
 # aws-scaling-and-monitoring-terraform

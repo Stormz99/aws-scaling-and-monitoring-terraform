@@ -31,8 +31,6 @@ This project automates the deployment of an AWS infrastructure using Terraform. 
 .
 ├── main.tf       # Main Terraform configuration file.
 ├── variables.tf  # Variables definition file.
-├── outputs.tf    # Outputs definition file.
-├── provider.tf   # AWS provider configuration.
 ├── terraform.tfvars # Variable values for the project.
 ├── README.md     # Project documentation.
 ```

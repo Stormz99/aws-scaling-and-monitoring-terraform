@@ -23,7 +23,7 @@ variable "vpc_name" {
 variable "environment" {
   description = "The environment to deploy to"
   type        = string
-  default     = "production"
+  default     = "test"
 }
 
 # Private Subnets

@@ -51,8 +51,8 @@ This project automates the deployment of an AWS infrastructure using Terraform. 
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
-cd <repository-folder>
+git clone https://github.com/Stormz99/aws-scaling-and-monitoring-terraform.git
+cd your-repository
 ```
 
 ### 2. Initialize Terraform

@@ -112,7 +112,7 @@ provider "aws" {
 }
 ```
 
-### **outputs.tf**
+### **variables.tf**
 ```hcl
 output "vpc_id" {
   description = "ID of the created VPC"

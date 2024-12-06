@@ -172,23 +172,22 @@ environment          = "dev"
 - **`lb_sg`:** Allows inbound HTTP traffic on port 80.
 - **`my_new_security_group`:** Allows inbound HTTPS traffic on port 443.
 
-### 3. **S3 Bucket**
+### 3. **Load Balancer (ALB)**
+- The **Application Load Balancer (ALB)** distributes incoming HTTP traffic across the instances deployed in the public subnets. This ensures high availability and reliability for the application, scaling dynamically with the traffic demand.
+  
+### 4. **CloudWatch and SNS**
+- **CloudWatch Alarms** are configured to monitor the CPU utilization of instances in the Auto Scaling Group. If CPU usage exceeds the defined threshold (80%), an alarm is triggered.
+- **SNS Topic** is set up to send notifications when the CloudWatch alarm is triggered, ensuring proactive alerts for system administrators.
+
+### 5. **S3 Bucket**
 - Private S3 bucket for storing objects securely.
 - Bucket ACL explicitly set to `private`.
 
-### 4. **Random ID Resource**
+### 6. **Random ID Resource**
 - Generates a unique hexadecimal suffix for resource naming.
 
 ---
 
-## **Potential Enhancements**
-
-1. Add a load balancer configuration.
-2. Implement auto-scaling groups for high availability.
-3. Enhance the security groups with stricter rules.
-4. Add CloudWatch monitoring for resource logging and alerts.
-
----
 
 ## **Contributing**
 

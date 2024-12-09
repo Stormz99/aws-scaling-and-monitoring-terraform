@@ -1,6 +1,6 @@
 # Terraform AWS Infrastructure Setup
 
-This project automates the deployment of an AWS infrastructure using Terraform. It provisions a Virtual Private Cloud (VPC) with public and private subnets, security groups, an internet gateway, a NAT gateway, and additional resources like an S3 bucket. This README provides a detailed overview of the project, its configuration, and how to use it.
+This project automates the deployment of an AWS infrastructure using Terraform. It provisions a Virtual Private Cloud (VPC) with public and private subnets, security groups, an internet gateway, a NAT gateway, and additional resources like an S3 bucket and Auto Scaling Group. This README provides a detailed overview of the project, its configuration, and how to use it.
 
 ---
 
@@ -17,10 +17,18 @@ This project automates the deployment of an AWS infrastructure using Terraform. 
 3. **Security Groups:**
    - Security groups for allowing specific inbound traffic.
 
-4. **S3 Bucket:**
+4. **Auto Scaling and Load Balancing:**
+   - Auto Scaling Group with dynamic scaling policies.
+   - Application Load Balancer (ALB) for distributing traffic.
+
+5. **Monitoring:**
+   - CloudWatch Alarms for resource monitoring.
+   - SNS Notifications for alerts.
+
+6. **S3 Bucket:**
    - A secure S3 bucket with private ACL.
 
-5. **Random ID Generator:**
+7. **Random ID Generator:**
    - Ensures unique naming for resources like S3 buckets.
 
 ---
@@ -50,7 +58,7 @@ This project automates the deployment of an AWS infrastructure using Terraform. 
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/Stormz99/aws-scaling-and-monitoring-terraform.git
-cd your-repository
+cd aws-scaling-and-monitoring-terraform
 ```
 
 ### 2. Initialize Terraform
@@ -88,18 +96,24 @@ terraform destroy
 
 The project uses the following variables, defined in `variables.tf`:
 
-| Variable Name          | Description                                   | Type   | Default Value            |
-|------------------------|-----------------------------------------------|--------|--------------------------|
-| `aws_region`           | AWS region to deploy resources in            | string | `us-east-1`              |
-| `vpc_name`             | Name of the VPC                              | string | `demo_vpc`               |
-| `vpc_cidr`             | CIDR block for the VPC                       | string | `10.0.0.0/16`            |
-| `private_subnets`      | Map of private subnet names to AZ indices    | map    | See `variables.tf`       |
-| `public_subnets`       | Map of public subnet names to AZ indices     | map    | See `variables.tf`       |
-| `ami_id`               | AMI ID for the web server                    | string | `ami-0fb653ca2d3203ac1`  |
-| `instance_type`        | Instance type for the web server             | string | `t2.micro`               |
-| `variable_sub_cidr`    | CIDR block for an additional subnet          | string | `10.0.212.0/24`          |
-| `variable_sub_az`      | Availability zone for the additional subnet  | string | -                        |
-| `environment`          | Deployment environment (e.g., dev, prod)     | string | -                        |
+| Variable Name                  | Description                                   | Type   | Default Value            |
+|--------------------------------|-----------------------------------------------|--------|--------------------------|
+| `aws_region`                   | AWS region to deploy resources in            | string | `us-east-1`              |
+| `vpc_name`                     | Name of the VPC                              | string | `my-vpc`                 |
+| `vpc_cidr`                     | CIDR block for the VPC                       | string | `10.0.0.0/16`            |
+| `private_subnets`              | Map of private subnet names to AZ indices    | map    | See `variables.tf`       |
+| `public_subnets`               | Map of public subnet names to AZ indices     | map    | See `variables.tf`       |
+| `ami_id`                       | AMI ID for the web server                    | string | `ami-0c55b159cbfafe1f0`  |
+| `instance_type`                | Instance type for the web server             | string | `t2.micro`               |
+| `variable_sub_cidr`            | CIDR block for an additional subnet          | string | `10.0.1.0/24`            |
+| `environment`                  | Deployment environment (e.g., dev, prod)     | string | `test`                   |
+| `asg_desired_capacity`         | Desired instances in the Auto Scaling Group  | number | `2`                      |
+| `asg_max_size`                 | Max instances in the Auto Scaling Group      | number | `5`                      |
+| `asg_min_size`                 | Min instances in the Auto Scaling Group      | number | `2`                      |
+| `cpu_alarm_threshold`          | CPU utilization threshold for alarms         | number | `80`                     |
+| `cpu_alarm_period`             | Period (in seconds) for CloudWatch alarms    | number | `300`                    |
+| `cpu_alarm_evaluation_periods` | Evaluation periods for CloudWatch alarms     | number | `1`                      |
+| `sns_topic_name`               | SNS Topic for notifications                  | string | `my-sns-topic`           |
 
 ---
 
@@ -114,47 +128,95 @@ provider "aws" {
 
 ### **variables.tf**
 ```hcl
-output "vpc_id" {
-  description = "ID of the created VPC"
-  value       = aws_vpc.vpc.id
+variable "aws_region" {
+  description = "The AWS region to create resources in"
+  type        = string
+  default     = "us-east-1"
 }
 
-output "private_subnets" {
-  description = "IDs of the created private subnets"
-  value       = aws_subnet.private_subnets[*].id
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
+  type        = string
+  default     = "10.0.0.0/16"
 }
 
-output "public_subnets" {
-  description = "IDs of the created public subnets"
-  value       = aws_subnet.public_subnets[*].id
+variable "vpc_name" {
+  description = "Name of the VPC"
+  type        = string
+  default     = "my-vpc"
 }
 
-output "s3_bucket_name" {
-  description = "Name of the created S3 bucket"
-  value       = aws_s3_bucket.my_new_s3_bucket.bucket
+variable "private_subnets" {
+  description = "List of private subnet CIDR blocks"
+  type        = map(number)
+  default = {
+    "subnet-private-1" = 1
+    "subnet-private-2" = 2
+  }
 }
-```
 
-### **terraform.tfvars**
-```hcl
-aws_region           = "us-east-1"
-vpc_name             = "demo_vpc"
-vpc_cidr             = "10.0.0.0/16"
-private_subnets      = {
-  "private_subnet_1" = 1
-  "private_subnet_2" = 2
-  "private_subnet_3" = 3
+variable "public_subnets" {
+  description = "List of public subnet CIDR blocks"
+  type        = map(number)
+  default = {
+    "subnet-public-1" = 1
+    "subnet-public-2" = 2
+  }
 }
-public_subnets       = {
-  "public_subnet_1" = 1
-  "public_subnet_2" = 2
-  "public_subnet_3" = 3
+
+variable "ami_id" {
+  description = "The AMI ID to use for the EC2 instances"
+  type        = string
+  default     = "ami-0c55b159cbfafe1f0"
 }
-ami_id               = "ami-0fb653ca2d3203ac1"
-instance_type        = "t2.micro"
-variable_sub_cidr    = "10.0.212.0/24"
-variable_sub_az      = "us-east-1a"
-environment          = "dev"
+
+variable "instance_type" {
+  description = "Instance type for the EC2 instances"
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "asg_desired_capacity" {
+  description = "The desired capacity of the Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "asg_max_size" {
+  description = "The maximum size of the Auto Scaling Group"
+  type        = number
+  default     = 5
+}
+
+variable "asg_min_size" {
+  description = "The minimum size of the Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "cpu_alarm_threshold" {
+  description = "The threshold for triggering the CloudWatch CPU utilization alarm"
+  type        = number
+  default     = 80
+}
+
+variable "cpu_alarm_period" {
+  description = "The period (in seconds) for CloudWatch CPU utilization alarm"
+  type        = number
+  default     = 300
+}
+
+variable "cpu_alarm_evaluation_periods" {
+  description = "The number of periods to evaluate for CloudWatch CPU utilization alarm"
+  type        = number
+  default     = 1
+}
+
+variable "sns_topic_name" {
+  description = "Name of the SNS topic for CloudWatch alarm notifications"
+  type        = string
+  default     = "my-sns-topic"
+}
 ```
 
 ---
@@ -172,7 +234,7 @@ environment          = "dev"
 
 ### 3. **Load Balancer (ALB)**
 - The **Application Load Balancer (ALB)** distributes incoming HTTP traffic across the instances deployed in the public subnets. This ensures high availability and reliability for the application, scaling dynamically with the traffic demand.
-  
+
 ### 4. **CloudWatch and SNS**
 - **CloudWatch Alarms** are configured to monitor the CPU utilization of instances in the Auto Scaling Group. If CPU usage exceeds the defined threshold (80%), an alarm is triggered.
 - **SNS Topic** is set up to send notifications when the CloudWatch alarm is triggered, ensuring proactive alerts for system administrators.

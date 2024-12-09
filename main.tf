@@ -45,6 +45,42 @@ resource "aws_subnet" "public_subnets" {
   }
 }
 
+# EC2 Instance
+resource "aws_instance" "ubuntu_server" {
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public_subnets["public_subnet_1"].id
+  security_groups             = [aws_security_group.vpc-ping.id, aws_security_group.ingress-ssh.id, aws_security_group.vpc-web.id]
+  associate_public_ip_address = true
+  key_name                    = aws_key_pair.generated.key_name
+
+  connection {
+    user        = "ubuntu"
+    private_key = tls_private_key.generated.private_key_pem
+    host        = self.public_ip
+  }
+
+  provisioner "local-exec" {
+    command = "chmod 600 ${local_file.private_key_pem.filename}"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo rm -rf /tmp",
+      "sudo git clone https://github.com/hashicorp/demo-terraform-101 /tmp",
+      "sudo sh /tmp/assets/setup-web.sh",
+    ]
+  }
+
+  tags = {
+    Name = "Ubuntu EC2 Server"
+  }
+
+  lifecycle {
+    ignore_changes = [security_groups]
+  }
+}
+
 # Internet Gateway
 resource "aws_internet_gateway" "internet_gateway" {
   vpc_id = aws_vpc.vpc.id
@@ -84,11 +120,11 @@ resource "aws_security_group" "lb_sg" {
 
 # Load Balancer
 resource "aws_lb" "app_lb" {
-  name               = "app-load-balancer"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups   = [aws_security_group.lb_sg.id]
-  subnets            = [for subnet in aws_subnet.public_subnets : subnet.id]
+  name                       = "app-load-balancer"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.lb_sg.id]
+  subnets                    = [for subnet in aws_subnet.public_subnets : subnet.id]
   enable_deletion_protection = true
 
   tags = {
@@ -119,9 +155,9 @@ resource "aws_lb_target_group" "app_target_group" {
 
 # Auto Scaling Launch Configuration
 resource "aws_launch_configuration" "asg_launch_config" {
-  name          = "asg-launch-config"
-  image_id      = var.ami_id
-  instance_type = "t2.micro"
+  name            = "asg-launch-config"
+  image_id        = var.ami_id
+  instance_type   = "t2.micro"
   security_groups = [aws_security_group.lb_sg.id]
 
   lifecycle {
@@ -138,20 +174,18 @@ resource "aws_autoscaling_group" "asg" {
   vpc_zone_identifier  = [for subnet in aws_subnet.private_subnets : subnet.id]
   target_group_arns    = [aws_lb_target_group.app_target_group.arn]
 
-  tags = [
-    {
-      key                 = "Name"
-      value               = "asg-instance"
-      propagate_at_launch = true
-    },
-    {
-      key                 = "Environment"
-      value               = var.environment
-      propagate_at_launch = true
-    }
-  ]
-}
+  tag {
+    key                 = "Name"
+    value               = "asg-instance"
+    propagate_at_launch = true
+  }
 
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+}
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "asg_log_group" {
@@ -182,7 +216,12 @@ resource "aws_sns_topic" "my_sns_topic" {
   name = "my-sns-topic"
 }
 
-# S3 Bucket and ACL (unchanged from your example)
+# Random ID Generator
+resource "random_id" "randomness" {
+  byte_length = 8
+}
+
+# S3 Bucket and ACL
 resource "aws_s3_bucket" "my_new_s3_bucket" {
   bucket = "my-new-tf-s3-bucket-${random_id.randomness.hex}"
 
@@ -191,6 +230,7 @@ resource "aws_s3_bucket" "my_new_s3_bucket" {
     Purpose = "Adding S3 Bucket"
   }
 }
+
 
 resource "aws_s3_bucket_acl" "my_new_s3_bucket_acl" {
   bucket = aws_s3_bucket.my_new_s3_bucket.id
@@ -214,3 +254,96 @@ resource "aws_security_group" "my_new_security_group" {
     Name = "web_server_inbound"
   }
 }
+
+#Generating a private key with an RSA Cryptographic algorithm
+resource "tls_private_key" "generated" {
+  algorithm = "RSA"
+}
+
+#Storing the key in a local file
+resource "local_file" "private_key_pem" {
+  content  = tls_private_key.generated.private_key_pem
+  filename = "MyAWSKey.pem"
+}
+
+#Generating an AWS key pair
+resource "aws_key_pair" "generated" {
+  key_name   = "MyAWSKey"
+  public_key = tls_private_key.generated.public_key_openssh
+
+  lifecycle {
+    ignore_changes = [key_name]
+  }
+}
+
+
+# Security Groups for SSH traffic
+resource "aws_security_group" "ingress-ssh" {
+  name   = "allow-all-ssh"
+  vpc_id = aws_vpc.vpc.id
+  ingress {
+    cidr_blocks = [
+      "0.0.0.0/0"
+    ]
+    from_port = 22
+    to_port   = 22
+    protocol  = "tcp"
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Create Security Group - Web Traffic
+resource "aws_security_group" "vpc-web" {
+  name        = "vpc-web-${terraform.workspace}"
+  vpc_id      = aws_vpc.vpc.id
+  description = "Web Traffic"
+  ingress {
+    description = "Allow Port 80"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Allow Port 443"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow all ip and ports outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "vpc-ping" {
+  name        = "vpc-ping"
+  vpc_id      = aws_vpc.vpc.id
+  description = "ICMP for Ping Access"
+  ingress {
+    description = "Allow ICMP Traffic"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    description = "Allow all ip and ports outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+

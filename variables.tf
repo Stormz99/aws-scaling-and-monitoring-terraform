@@ -38,13 +38,14 @@ variable "private_subnets" {
 
 # Public Subnets
 variable "public_subnets" {
-  description = "List of public subnet CIDR blocks"
-  type        = map(number)
+  type = map(any)
   default = {
-    "subnet-public-1" = 1
-    "subnet-public-2" = 2
+    "public_subnet_1" = 1
+    "public_subnet_2" = 2
   }
 }
+
+
 
 # Variable Subnet CIDR Block
 variable "variable_sub_cidr" {

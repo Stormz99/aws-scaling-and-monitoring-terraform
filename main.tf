@@ -30,7 +30,6 @@ resource "aws_subnet" "private_subnets" {
   }
 }
 
-# Public Subnets
 resource "aws_subnet" "public_subnets" {
   for_each = var.public_subnets
 
@@ -45,11 +44,24 @@ resource "aws_subnet" "public_subnets" {
   }
 }
 
-# EC2 Instance
+output "subnet_debug" {
+  value = {
+    for subnet_key, subnet in aws_subnet.public_subnets :
+    subnet_key => {
+      cidr_block        = subnet.cidr_block
+      availability_zone = subnet.availability_zone
+      subnet_name       = subnet_key
+    }
+  }
+}
+
+
 resource "aws_instance" "ubuntu_server" {
+  for_each = aws_subnet.public_subnets
+
   ami                         = var.ami_id
   instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public_subnets["public_subnet_1"].id
+  subnet_id                   = each.value.id   # Correct reference to subnet's id
   security_groups             = [aws_security_group.vpc-ping.id, aws_security_group.ingress-ssh.id, aws_security_group.vpc-web.id]
   associate_public_ip_address = true
   key_name                    = aws_key_pair.generated.key_name
@@ -80,6 +92,8 @@ resource "aws_instance" "ubuntu_server" {
     ignore_changes = [security_groups]
   }
 }
+
+
 
 # Internet Gateway
 resource "aws_internet_gateway" "internet_gateway" {

@@ -65,7 +65,7 @@ variable "variable_sub_auto_ip" {
 variable "ami_id" {
   description = "The AMI ID to use for the EC2 instances"
   type        = string
-  default     = "ami-0c55b159cbfafe1f0" # Change this to your preferred AMI ID
+  default     = "ami-0c55b159cbfafe1f0" 
 }
 
 # S3 Bucket Name Prefix
